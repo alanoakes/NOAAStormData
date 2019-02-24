@@ -1,0 +1,141 @@
+---
+title: "NOAA Storm Data Preparation Analysis"
+author: "Parker Oakes"
+date: "February 23, 2019"
+output: html_document
+---
+
+## Synopsis
+
+This report is to submit an analysis to a hypothetical government or municipal manager who would be responsible in preparing for severe weather events and will need to prioritize resources for different types of events. Albeit, there are no specific recommendations in this report, the analysis of the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database is sufficient with the following two questions:
+
+1. Across the United States, which types of events are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+The data and meta data supporting this analysis is located in the following locations:
+
+* [NOAA Storms Data Base](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz)
+* [National Weather Service Storm Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+* [National Climatic Data Center Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+## Data Processing
+
+### Loading the data from NOAA and R Libraries
+
+```{r echo=TRUE}
+library(ggplot2)
+library(reshape2)
+setwd("/home/alanoakes/Documents/Programming Notes/DataScience/Mod5 - Repoducible Research/NoaaStormData")
+url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(url=url,destfile="repdata_data_StormData.csv.bz2")
+NOAA.Data<-read.csv("repdata_data_StormData.csv.bz2")
+list("Dimensions of Data Set"=dim(NOAA.Data),
+     "% NA's in Data Set"=mean(is.na(NOAA.Data)),
+     "Total Count of NA's of Data Set"=sum(is.na(NOAA.Data)),
+     "Variable Names"=names(NOAA.Data))
+```
+
+As we can see with this data set provided by NOAA it has a decent amount of rows and columns. It has a total of 1,745,947 misssing data points throughout the data set making up 5.23% of the data provided. There are 37 columns ("variables") to our data. This amount of variables gives us many things we could include in our total analysis. However, for our analysis we will need to focus on the variables supporting our analysis on population health and economic consquences. Before we are able to make any real measurements to our two questions we must determine a sample of most frequent and consequential storm types to evaluate in the variable "EVTYPE".
+
+### Creating a Sampling of the NOAA Data
+
+Next, I will build a top-ten list of the most frequent and consequential storm types to appriately size our data for the initial two questions.
+
+```{r echo=TRUE}
+TopTen<-table(NOAA.Data$EVTYPE)
+TopTenD<-as.data.frame(TopTen)
+TopTenL<-head(TopTenD[order(-TopTenD$Freq),],10)
+EventTypes<-TopTenL$Var1
+EventTypes<-as.character(EventTypes)
+NOAA.Data$EVTYPE<-as.character(NOAA.Data$EVTYPE)
+head(TopTenD[order(-TopTenD$Freq),],10)
+```
+
+As we can see with our above top-ten list, the frequency of occurences for these storm types is rather large. I notice in our top-ten items that wind has been notated four seperate times (e.g. *"TSTM WIND","THUNDERSTORM WIND","THUNDERSTORM WINDS","HIGH WIND"*). There is no absolute notation from the NWS to clarify these four wind categories, but suffice it to say this has been a vary frequent occurence in the United States.
+
+### Pre-Processing Our Data for Resulting Analysis
+
+Next we will pre-process our data with these top-ten storm types to perform our two question national impact analysis.
+
+```{r echo=TRUE}
+# Question 1
+Question1<-NOAA.Data[NOAA.Data$EVTYPE==EventTypes,c(8,23,24)]
+names(Question1)<-c("EventType","Fatalities","Injuries")
+Question1$EventType<-as.factor(Question1$EventType)
+Question1$Fatalities<-as.numeric(Question1$Fatalities)
+Question1$Injuries<-as.numeric(Question1$Injuries)
+Q1Melt<-melt(Question1,na.rm=T)
+# Question 2
+Question2<-NOAA.Data[NOAA.Data$EVTYPE==EventTypes,c(8,26,28)]
+names(Question2)<-c("EventType","PropDamage","CropDamage")
+Question2$EventType<-as.factor(Question2$EventType)
+Question2$PropDamage<-as.numeric(Question2$PropDamage)
+Question2$CropDamage<-as.numeric(Question2$CropDamage)
+Q2Melt<-melt(Question2,na.rm=T)
+# Summaries of Both Datasets
+list("Question 1 Data Set"=summary(Q1Melt),
+     "Question 2 Data Set"=summary(Q2Melt))
+```
+
+### Conclusion of Data Pre-Processing
+
+Before we forward to our results section, we need to summarize our pre-processed data before we can visualize it for final analysis and ask this data our two questions. To state a simple summary, both of these two datasets now only have three variables instead of the original thrity-seven. Also with reducing our dataset with our top-ten storm types we now have a sampling size of n = 161,034 rows ("observations") of the initial population size of N = 902,297 rows; giving us a sample size of n = 17.8471169%.
+
+## Results
+
+I put together two seperate stacked barplots to determine two variables for analysis:
+
+1. Which "Event Type" has the cumulative impact on resources per NOAA's data?
+2. Which two health and economic variables are the most contributive to the "Event Type"?
+
+### Question 1
+```{r echo=TRUE}
+# Plot
+ggplot(data=Q1Melt,aes(x=EventType,y=value,fill=variable))+
+  geom_bar(stat="identity")+coord_flip()+theme_linedraw()
+# Table
+Q1<-as.data.frame(tapply(Q1Melt$value,Q1Melt$EventType,sum))
+as.data.frame(Q1[order(-Q1),])
+```
+
+**Question 1:**
+Across the United States, which types of events are most harmful with respect to population health?
+
+**Analysis 1:**
+Tornado frequencies of fatalities and injuries far out-weighed the other event types. Also, the four wind event types would easily come in second if they were combined together. Based off of our table which sums the fatalities and injuries per event type, we show nothing comes close to tornadoes with 12,308 counts of population health impacts. Our four wind event types equal a sum of 1,353 total injuries and fatalities.
+
+### Question 2
+```{r echo=TRUE}
+# Plot
+ggplot(data=Q2Melt,aes(x=EventType,y=value,fill=variable))+
+  geom_bar(stat="identity",position="stack")+
+  coord_flip()+theme_linedraw()
+# Table
+Q2<-as.data.frame(tapply(Q2Melt$value,Q2Melt$EventType,sum))
+as.data.frame(Q2[order(-Q2),])
+```
+
+**Question 2:**
+Across the United States, which types of events have the greatest economic consequences?
+
+**Analysis 2:**
+Per the above stacked barplot and the table there are many event types which impacted our country economically in both property damage and crop damage. Cumulatively: Hail, Thunderstorm Wind, Tstm Wind and Tornadoes impacted the most with an above $100M worth of damage. The anlysis was conlcusive on event type frequency instead of economic values alone since resource allocation will be our judgement. Our two questions lends itself to most expensive by issue occurence rather than expense occurence alone so to have resources readily available for reocurrence. However, I have provided a top-ten table of event types after summing property damage expenses and crop damage expenses per event type exluding my previous event type sampling.
+
+```{r echo=TRUE}
+# compare to most expensive against most occuring
+NOAA.Data$EVTYPE<-as.character(NOAA.Data$EVTYPE)
+NOAA.Data$PROPDMGEXP<-as.numeric(NOAA.Data$PROPDMGEXP)
+NOAA.Data$CROPDMGEXP<-as.numeric(NOAA.Data$CROPDMGEXP)
+Expense<-NOAA.Data$PROPDMGEXP+NOAA.Data$CROPDMGE
+ExpEvents<-cbind.data.frame(NOAA.Data$REFNUM,NOAA.Data$EVTYPE,NOAA.Data$PROPDMGEXP,NOAA.Data$CROPDMGEXP)
+ExpEvents$Expense<-ExpEvents$`NOAA.Data$PROPDMGEXP`+ExpEvents$`NOAA.Data$CROPDMGEXP`
+x1<-tapply(ExpEvents$Expense,ExpEvents$`NOAA.Data$EVTYPE`,sum)
+x1.1<-as.data.frame(x1)
+head(as.data.frame(x1.1[order(-x1),]),10)
+```
+
+Comparatively, these two economic top-ten event type tables are the same. I actually expected to see hurricanes or volcanoes included in this list. Rather hail, flooding and wind have been the most expensive event types across our country.
+
+## Conclusion
+
+We have drawn sufficient conclusions of the provided NOAA data. First we sampled the data per the event types that were most frequent. Our population health impact conclusion was very easily tornadoes and wind caused the most fatalities and injuries. Our economic conclusion was hail, variants of wind and tornadoes were the most expensive. When reanalyzing against most occuring and most expensive, our top-ten economic list output was the same.
